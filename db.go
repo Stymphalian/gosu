@@ -4,7 +4,7 @@ import (
 	"io"
 )
 
-// The DB binary file formnats supported by Osu!
+// The DB binary file formats supported by Osu!
 // See https://github.com/ppy/osu-wiki/blob/master/wiki/osu!_File_Formats/Db_(file_format)/en.md
 // for the spec of these fields.
 

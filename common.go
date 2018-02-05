@@ -12,8 +12,8 @@ import (
 	"github.com/kr/pretty"
 )
 
-// Type aliases so that the number of bytes match what osu is expecting in
-// all of the structs. These match up to the spec exepct for:
+// Type aliases so that the number of bytes match what osu is expecting.
+// Exceptions:
 // 1. ULEB128 is aliased to uint64 (hopefully this is big enough)
 // 2. String is aliased to a struct with all the required information.
 type Byte uint8
@@ -111,7 +111,7 @@ func PrettyPrint(v interface{}) {
 	fmt.Printf("%# v", pretty.Formatter(v))
 }
 
-// Invoke call a method on the given interface using reflection
+// Invoke - call a method on the given interface using reflection
 // Args:
 //   any: Any object for which you want to call a method on. Be sure to pass
 //     in the pointer if the method belongs to the pointer interface
@@ -127,13 +127,12 @@ func Invoke(any interface{}, name string, args ...interface{}) []reflect.Value {
 
 // User reflection to unmarshal all the fields in the given interface
 // This will loop through every field and call the 'UnmarshalBinary' method
-// on the type passing in the 'buf' which is the source of all the bytes
-// A special case is where a field is a slice. In this case there is a special
-// semantic
-// 1. We look up the field name like "Num<SliceFieldName" and retrieve the number
-//    of elements to exepect from the stream
+// on the type passing in the 'buf' which is the source of all the bytes.
+// A special case is where a field is a slice. In this case:
+// 1. We look up the field name like "Num<SliceFieldName>" and retrieve the
+//    number of elements to exepect from the stream
 // 2. Create a new slice
-// 3. Iterate through each slice eleement and run the UnmarshalBinary method
+// 3. Iterate through each slice element and run the UnmarshalBinary method
 // Args:
 //   db: The object to unmarshal
 ///  buf: The buffer in which we retrieve bytes to unmarshal
@@ -147,7 +146,7 @@ func UnmarshalAny(db interface{}, buf io.Reader) error {
 			numFieldName := "Num" + dbVal.Type().Field(i).Name
 			numElements := dbVal.FieldByName(numFieldName).Interface()
 			// TODO(jordanyu): This is hack, we can't always assume it will be an Int
-			// when we have a slice of elements afterwards
+			// when we have a slice of element afterwards
 			intNumElements := int(numElements.(Int))
 
 			// Create a new slice of appropriate size and then run the unmarshal
