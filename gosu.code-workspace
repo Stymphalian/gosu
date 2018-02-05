@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+			"go.gopath": "/home/jordan/dev2/goenv/1.9.3",
+			"go.goroot": "/home/jordan/dev2/local/go",
+			"go.formatTool": "goimports",
+	}
+}
