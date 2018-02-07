@@ -10,6 +10,8 @@ import (
 	"github.com/bnch/uleb128"
 )
 
+//go:generate go run tools/gen_codec.go
+
 type BinaryOsuCodec interface {
 	BinaryOsuMarshaler
 	BinaryOsuUnmarshaler
@@ -25,24 +27,9 @@ type BinaryOsuMarshaler interface {
 	MarshalBinary(buf io.Writer) error
 }
 
-// Unmarshal functions
+// Marshal/Unmarshal function for ULEB128 and String
+// The other types can be found in auto.codec.go
 // -----------------------------------------------------------------------------
-
-func (this *Byte) UnmarshalBinary(buf io.Reader) error {
-	return binary.Read(buf, binary.LittleEndian, this)
-}
-
-func (this *Short) UnmarshalBinary(buf io.Reader) error {
-	return binary.Read(buf, binary.LittleEndian, this)
-}
-
-func (this *Int) UnmarshalBinary(buf io.Reader) error {
-	return binary.Read(buf, binary.LittleEndian, this)
-}
-
-func (this *Long) UnmarshalBinary(buf io.Reader) error {
-	return binary.Read(buf, binary.LittleEndian, this)
-}
 
 func (this *ULEB128) UnmarshalBinary(buf io.Reader) error {
 	total := uleb128.UnmarshalReader(buf)
@@ -52,16 +39,10 @@ func (this *ULEB128) UnmarshalBinary(buf io.Reader) error {
 	return nil
 }
 
-func (this *Single) UnmarshalBinary(buf io.Reader) error {
-	return binary.Read(buf, binary.LittleEndian, this)
-}
-
-func (this *Double) UnmarshalBinary(buf io.Reader) error {
-	return binary.Read(buf, binary.LittleEndian, this)
-}
-
-func (this *Boolean) UnmarshalBinary(buf io.Reader) error {
-	return binary.Read(buf, binary.LittleEndian, this)
+func (this *ULEB128) MarshalBinary(buf io.Writer) error {
+	got := uleb128.Marshal(int(uint64(*this)))
+	buf.Write(got)
+	return nil
 }
 
 func (this *String) UnmarshalBinary(buf io.Reader) error {
@@ -92,90 +73,6 @@ func (this *String) UnmarshalBinary(buf io.Reader) error {
 	return nil
 }
 
-func (this *DateTime) UnmarshalBinary(buf io.Reader) error {
-	return binary.Read(buf, binary.LittleEndian, &this.Value)
-}
-
-func (this *OsuDb) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *IntDoublePair) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *TimingPoint) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *BeatMap) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *CollectionDb) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *CollectionDbElement) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *ScoresDb) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *ScoresDbBeatMap) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *ScoresDbBeatMapScore) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *PresenceDb) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-func (this *PlayerPresence) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-
-// Marshal functions
-// -----------------------------------------------------------------------------
-func (this *Byte) MarshalBinary(buf io.Writer) error {
-	return binary.Write(buf, binary.LittleEndian, this)
-}
-
-func (this *Short) MarshalBinary(buf io.Writer) error {
-	return binary.Write(buf, binary.LittleEndian, this)
-}
-
-func (this *Int) MarshalBinary(buf io.Writer) error {
-	return binary.Write(buf, binary.LittleEndian, this)
-}
-
-func (this *Long) MarshalBinary(buf io.Writer) error {
-	return binary.Write(buf, binary.LittleEndian, this)
-}
-
-func (this *ULEB128) MarshalBinary(buf io.Writer) error {
-	got := uleb128.Marshal(int(uint64(*this)))
-	buf.Write(got)
-	return nil
-}
-
-func (this *Single) MarshalBinary(buf io.Writer) error {
-	return binary.Write(buf, binary.LittleEndian, this)
-}
-
-func (this *Double) MarshalBinary(buf io.Writer) error {
-	return binary.Write(buf, binary.LittleEndian, this)
-}
-
-func (this *Boolean) MarshalBinary(buf io.Writer) error {
-	return binary.Write(buf, binary.LittleEndian, this)
-}
-
 func (this *String) MarshalBinary(buf io.Writer) error {
 	err := binary.Write(buf, binary.LittleEndian, &this.Cond)
 	if err != nil {
@@ -199,54 +96,6 @@ func (this *String) MarshalBinary(buf io.Writer) error {
 		}
 	}
 	return nil
-}
-
-func (this *DateTime) MarshalBinary(buf io.Writer) error {
-	return binary.Write(buf, binary.LittleEndian, &this.Value)
-}
-
-func (this *OsuDb) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *IntDoublePair) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *TimingPoint) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *BeatMap) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *CollectionDb) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *CollectionDbElement) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *ScoresDb) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *ScoresDbBeatMap) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *ScoresDbBeatMapScore) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *PresenceDb) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
-}
-
-func (this *PlayerPresence) MarshalBinary(buf io.Writer) error {
-	return MarshalAny(this, buf)
 }
 
 // Lots of little helper methods
