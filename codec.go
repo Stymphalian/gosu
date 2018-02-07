@@ -19,19 +19,19 @@ type BinaryOsuCodec interface {
 
 // Unmarshaler interface for Osu Binary blobs
 type BinaryOsuUnmarshaler interface {
-	UnmarshalBinary(buf io.Reader) error
+	UnmarshalOsuBinary(buf io.Reader) error
 }
 
 // Marshaler interface for Osu Binary blobs
 type BinaryOsuMarshaler interface {
-	MarshalBinary(buf io.Writer) error
+	MarshalOsuBinary(buf io.Writer) error
 }
 
 // Marshal/Unmarshal function for ULEB128 and String
 // The other types can be found in auto.codec.go
 // -----------------------------------------------------------------------------
 
-func (this *ULEB128) UnmarshalBinary(buf io.Reader) error {
+func (this *ULEB128) UnmarshalOsuBinary(buf io.Reader) error {
 	total := uleb128.UnmarshalReader(buf)
 	*this = ULEB128(uint64(total))
 
@@ -39,13 +39,13 @@ func (this *ULEB128) UnmarshalBinary(buf io.Reader) error {
 	return nil
 }
 
-func (this *ULEB128) MarshalBinary(buf io.Writer) error {
+func (this *ULEB128) MarshalOsuBinary(buf io.Writer) error {
 	got := uleb128.Marshal(int(uint64(*this)))
 	buf.Write(got)
 	return nil
 }
 
-func (this *String) UnmarshalBinary(buf io.Reader) error {
+func (this *String) UnmarshalOsuBinary(buf io.Reader) error {
 	err := binary.Read(buf, binary.LittleEndian, &this.Cond)
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func (this *String) UnmarshalBinary(buf io.Reader) error {
 
 	if this.Cond == 0xb {
 		// TODO(jordanyu): Add error handling logic
-		err := this.Len.UnmarshalBinary(buf)
+		err := this.Len.UnmarshalOsuBinary(buf)
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ func (this *String) UnmarshalBinary(buf io.Reader) error {
 	return nil
 }
 
-func (this *String) MarshalBinary(buf io.Writer) error {
+func (this *String) MarshalOsuBinary(buf io.Writer) error {
 	err := binary.Write(buf, binary.LittleEndian, &this.Cond)
 	if err != nil {
 		return err
@@ -81,7 +81,7 @@ func (this *String) MarshalBinary(buf io.Writer) error {
 
 	if this.Cond == 0xb {
 		// TODO(jordanyu): Add error handling logic
-		err := this.Len.MarshalBinary(buf)
+		err := this.Len.MarshalOsuBinary(buf)
 		if err != nil {
 			return err
 		}
@@ -116,13 +116,13 @@ func Invoke(any interface{}, name string, args ...interface{}) []reflect.Value {
 }
 
 // Use reflection to unmarshal all the fields in the given interface
-// This will loop through every field and call the 'UnmarshalBinary' method
+// This will loop through every field and call the 'UnmarshalOsuBinary' method
 // on the type passing in the 'buf' which is the source of all the bytes.
 // A special case is where a field is a slice. In this case:
 // 1. We look up the field name like "Num<SliceFieldName>" and retrieve the
 //    number of elements to exepect from the stream
 // 2. Create a new slice
-// 3. Iterate through each slice element and run the UnmarshalBinary method
+// 3. Iterate through each slice element and run the UnmarshalOsuBinary method
 // Args:
 //   db: The object to unmarshal
 ///  buf: The buffer in which we retrieve bytes to unmarshal
@@ -147,7 +147,7 @@ func UnmarshalAny(db interface{}, buf io.Reader) error {
 			currentMutableField.Set(sliceElems)
 			for j := 0; j < intNumElements; j++ {
 				ret := Invoke(currentMutableField.Index(j).Addr().Interface(),
-					"UnmarshalBinary", buf)
+					"UnmarshalOsuBinary", buf)
 
 				err := ret[0].Interface()
 				if err != nil {
@@ -155,9 +155,8 @@ func UnmarshalAny(db interface{}, buf io.Reader) error {
 				}
 			}
 		default:
-			// This is just a primitive field so just run the simple unmarhsal
 			ret := Invoke(
-				currentMutableField.Addr().Interface(), "UnmarshalBinary", buf)
+				currentMutableField.Addr().Interface(), "UnmarshalOsuBinary", buf)
 
 			err := ret[0].Interface()
 			if err != nil {
@@ -170,13 +169,13 @@ func UnmarshalAny(db interface{}, buf io.Reader) error {
 }
 
 // Use reflection to marshal all the fields in the given interface
-// This will loop through every field and call the 'MarshalBinary' method
+// This will loop through every field and call the 'MarshalOsuBinary' method
 // on the type passing in the 'buf' which is the source of all the bytes.
 // A special case is where a field is a slice. In this case:
 // 1. We look up the field name like "Num<SliceFieldName>" and retrieve the
 //    number of elements to exepect from the stream
 // 2. Create a new slice
-// 3. Iterate through each slice element and run the MarshalBinary method
+// 3. Iterate through each slice element and run the MarshalOsuBinary method
 // Args:
 //   db: The object to unmarshal
 ///  buf: The buffer in which to write the marshalled bytes
@@ -197,7 +196,7 @@ func MarshalAny(db interface{}, buf io.Writer) error {
 			// iterate through each element of the slice and marshal the struct
 			for j := 0; j < intNumElements; j++ {
 				ret := Invoke(currentMutableField.Index(j).Addr().Interface(),
-					"MarshalBinary", buf)
+					"MarshalOsuBinary", buf)
 
 				err := ret[0].Interface()
 				if err != nil {
@@ -207,7 +206,7 @@ func MarshalAny(db interface{}, buf io.Writer) error {
 		default:
 			// This is just a primitive field so just run the simple marshal
 			ret := Invoke(
-				currentMutableField.Addr().Interface(), "MarshalBinary", buf)
+				currentMutableField.Addr().Interface(), "MarshalOsuBinary", buf)
 
 			err := ret[0].Interface()
 			if err != nil {

@@ -75,11 +75,11 @@ import (
 
 {{- range .Commons }}
 
-func (this *{{.}}) UnmarshalBinary(buf io.Reader) error {
+func (this *{{.}}) UnmarshalOsuBinary(buf io.Reader) error {
 	return binary.Read(buf, binary.LittleEndian, this)
 }
 
-func (this *{{.}}) MarshalBinary(buf io.Writer) error {
+func (this *{{.}}) MarshalOsuBinary(buf io.Writer) error {
 	return binary.Write(buf, binary.LittleEndian, this)
 }
 
@@ -87,11 +87,11 @@ func (this *{{.}}) MarshalBinary(buf io.Writer) error {
 
 {{- range .Codecs }}
 
-func (this *{{.}}) UnmarshalBinary(buf io.Reader) error {
+func (this *{{.}}) UnmarshalOsuBinary(buf io.Reader) error {
 	return UnmarshalAny(this, buf)
 }
 
-func (this *{{.}}) MarshalBinary(buf io.Writer) error {
+func (this *{{.}}) MarshalOsuBinary(buf io.Writer) error {
 	return MarshalAny(this, buf)
 }
 
