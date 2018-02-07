@@ -1,9 +1,5 @@
 package gosu
 
-import (
-	"io"
-)
-
 // The DB binary file formats supported by Osu!
 // See https://github.com/ppy/osu-wiki/blob/master/wiki/osu!_File_Formats/Db_(file_format)/en.md
 // for the spec of these fields.
@@ -140,30 +136,20 @@ type ScoresDbBeatMapScore struct {
 	OnlineScoreId                Long
 }
 
-func (this *OsuDb) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
+type PresenceDb struct {
+	Version    Int
+	NumPlayers Int
+	Players    []PlayerPresence
 }
-func (this *IntDoublePair) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-func (this *TimingPoint) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-func (this *BeatMap) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-func (this *CollectionDb) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-func (this *CollectionDbElement) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-func (this *ScoresDb) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-func (this *ScoresDbBeatMap) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
-}
-func (this *ScoresDbBeatMapScore) UnmarshalBinary(buf io.Reader) error {
-	return UnmarshalAny(this, buf)
+
+type PlayerPresence struct {
+	PlayerId         Int
+	PlayerName       String
+	UtcOffset        Byte
+	Country          Byte
+	UnknownByteField Byte
+	Longitude        Single
+	Latitude         Single
+	GlobalRank       Int
+	DateModified     DateTime
 }
