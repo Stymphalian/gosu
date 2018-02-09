@@ -6,11 +6,10 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"strconv"
 
 	"github.com/bnch/uleb128"
 )
-
-//go:generate go run tools/gen_codec.go
 
 type BinaryOsuCodec interface {
 	BinaryOsuMarshaler
@@ -98,120 +97,299 @@ func (this *String) MarshalOsuBinary(buf io.Writer) error {
 	return nil
 }
 
-// Lots of little helper methods
-//-----------------------------------------------------------------------------
-
-// Invoke - call a method on the given interface using reflection
-// Args:
-//   any: Any object for which you want to call a method on. Be sure to pass
-//     in the pointer if the method belongs to the pointer interface
-//   name: The method name to invoke.
-//   args: Vardiadic number of args to pass to the method.
-func Invoke(any interface{}, name string, args ...interface{}) []reflect.Value {
-	inputs := make([]reflect.Value, len(args))
-	for i, _ := range args {
-		inputs[i] = reflect.ValueOf(args[i])
-	}
-	return reflect.ValueOf(any).MethodByName(name).Call(inputs)
+type OsuBinaryReader struct {
+	version uint32
 }
 
-// Use reflection to unmarshal all the fields in the given interface
-// This will loop through every field and call the 'UnmarshalOsuBinary' method
-// on the type passing in the 'buf' which is the source of all the bytes.
-// A special case is where a field is a slice. In this case:
-// 1. We look up the field name like "Num<SliceFieldName>" and retrieve the
-//    number of elements to exepect from the stream
-// 2. Create a new slice
-// 3. Iterate through each slice element and run the UnmarshalOsuBinary method
-// Args:
-//   db: The object to unmarshal
-///  buf: The buffer in which we retrieve bytes to unmarshal
-func UnmarshalAny(db interface{}, buf io.Reader) error {
-	dbVal := reflect.ValueOf(db).Elem()
+func (this *OsuBinaryReader) readSingleField(fieldType reflect.Type,
+	mutableField reflect.Value, tags reflect.StructTag, buf io.Reader) error {
 
-	for i := 0; i < dbVal.NumField(); i++ {
-		currentMutableField := reflect.ValueOf(db).Elem().Field(i)
+	if version, ok := tags.Lookup("osu-end"); ok {
+		intVersion, err := strconv.ParseUint(version, 10, 32)
+		if err != nil {
+			return err
+		}
+		if this.version > uint32(intVersion) {
+			return nil
+		}
+	}
+	if version, ok := tags.Lookup("osu-start"); ok {
+		intVersion, err := strconv.ParseUint(version, 10, 32)
+		if err != nil {
+			return err
+		}
+		if this.version < uint32(intVersion) {
+			return nil
+		}
+	}
 
-		switch dbVal.Field(i).Type().Kind() {
-		case reflect.Slice:
-			numFieldName := "Num" + dbVal.Type().Field(i).Name
-			numElements := dbVal.FieldByName(numFieldName).Interface()
-			// TODO(jordanyu): This is hack, we can't always assume it will be an Int
-			// when we have a slice of element afterwards
-			intNumElements := int(numElements.(Int))
-
-			// Create a new slice of appropriate size and then run the unmarshal
-			// function over each element in the slice.
-			sliceElems := reflect.MakeSlice(currentMutableField.Type(),
-				int(intNumElements), int(intNumElements))
-			currentMutableField.Set(sliceElems)
-			for j := 0; j < intNumElements; j++ {
-				ret := Invoke(currentMutableField.Index(j).Addr().Interface(),
-					"UnmarshalOsuBinary", buf)
-
-				err := ret[0].Interface()
-				if err != nil {
-					return err.(error)
-				}
+	switch fieldType.Kind() {
+	case reflect.Uint8:
+		var v uint8
+		if err := binary.Read(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+		if mutableField.CanSet() {
+			mutableField.Set(reflect.ValueOf(v))
+		}
+	case reflect.Uint16:
+		var v uint16
+		if err := binary.Read(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+		if mutableField.CanSet() {
+			mutableField.Set(reflect.ValueOf(v))
+		}
+	case reflect.Uint32:
+		var v uint32
+		if err := binary.Read(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+		if mutableField.CanSet() {
+			mutableField.Set(reflect.ValueOf(v))
+		}
+	case reflect.Uint64:
+		var v uint64
+		if err := binary.Read(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+		if mutableField.CanSet() {
+			mutableField.Set(reflect.ValueOf(v))
+		}
+	case reflect.Float32:
+		var v float32
+		if err := binary.Read(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+		if mutableField.CanSet() {
+			mutableField.Set(reflect.ValueOf(v))
+		}
+	case reflect.Float64:
+		var v float64
+		if err := binary.Read(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+		if mutableField.CanSet() {
+			mutableField.Set(reflect.ValueOf(v))
+		}
+	case reflect.Bool:
+		var v uint8
+		if err := binary.Read(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+		if mutableField.CanSet() {
+			mutableField.SetBool(v != 0)
+		}
+	case reflect.String:
+		var v String
+		if err := v.UnmarshalOsuBinary(buf); err != nil {
+			return err
+		}
+		if v.Cond == 0x0b && v.Len > 0 {
+			if mutableField.CanSet() {
+				mutableField.SetString(v.Text)
 			}
-		default:
-			ret := Invoke(
-				currentMutableField.Addr().Interface(), "UnmarshalOsuBinary", buf)
-
-			err := ret[0].Interface()
-			if err != nil {
-				return err.(error)
+		}
+	case reflect.Struct:
+		if err := this.Read(mutableField.Interface(), buf); err != nil {
+			return err
+		}
+	case reflect.Slice:
+		var numElems uint32
+		if err := binary.Read(buf, binary.LittleEndian, &numElems); err != nil {
+			return err
+		}
+		sliceElems := reflect.MakeSlice(mutableField.Type(), int(numElems), int(numElems))
+		mutableField.Set(sliceElems)
+		for j := 0; j < int(numElems); j++ {
+			if err := this.Read(mutableField.Index(j).Addr().Interface(), buf); err != nil {
+				return err
 			}
+		}
+	default:
+		return errors.New("Unsupported field type")
+	}
+
+	if _, ok := tags.Lookup("osu-version"); ok {
+		this.version = mutableField.Interface().(uint32)
+	}
+
+	return nil
+}
+
+func (this *OsuBinaryReader) Read(db interface{}, buf io.Reader) error {
+	valVal := reflect.ValueOf(db).Elem()
+	typeVal := reflect.TypeOf(db).Elem()
+
+	switch typeVal.Kind() {
+	case reflect.Struct:
+		for i := 0; i < typeVal.NumField(); i++ {
+			fieldType := typeVal.Field(i)
+			mutableField := valVal.Field(i)
+
+			if err := this.readSingleField(fieldType.Type, mutableField, fieldType.Tag, buf); err != nil {
+				return err
+			}
+		}
+	default:
+		// assuming primitive type
+		var tag reflect.StructTag
+		if err := this.readSingleField(typeVal, valVal, tag, buf); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-// Use reflection to marshal all the fields in the given interface
-// This will loop through every field and call the 'MarshalOsuBinary' method
-// on the type passing in the 'buf' which is the source of all the bytes.
-// A special case is where a field is a slice. In this case:
-// 1. We look up the field name like "Num<SliceFieldName>" and retrieve the
-//    number of elements to exepect from the stream
-// 2. Create a new slice
-// 3. Iterate through each slice element and run the MarshalOsuBinary method
-// Args:
-//   db: The object to unmarshal
-///  buf: The buffer in which to write the marshalled bytes
-func MarshalAny(db interface{}, buf io.Writer) error {
-	dbVal := reflect.ValueOf(db).Elem()
+type OsuBinaryWriter struct {
+	version uint32
+}
 
-	for i := 0; i < dbVal.NumField(); i++ {
-		currentMutableField := reflect.ValueOf(db).Elem().Field(i)
+func (this *OsuBinaryWriter) writeSingleField(fieldType reflect.Type,
+	mutableField reflect.Value, tags reflect.StructTag, buf io.Writer) error {
 
-		switch dbVal.Field(i).Type().Kind() {
-		case reflect.Slice:
-			numFieldName := "Num" + dbVal.Type().Field(i).Name
-			numElements := dbVal.FieldByName(numFieldName).Interface()
-			// TODO(jordanyu): This is hack, we can't always assume it will be an Int
-			// when we have a slice of element afterwards
-			intNumElements := int(numElements.(Int))
+	if _, ok := tags.Lookup("osu-version"); ok {
+		this.version = mutableField.Interface().(uint32)
+	}
 
-			// iterate through each element of the slice and marshal the struct
-			for j := 0; j < intNumElements; j++ {
-				ret := Invoke(currentMutableField.Index(j).Addr().Interface(),
-					"MarshalOsuBinary", buf)
+	if version, ok := tags.Lookup("osu-end"); ok {
+		intVersion, err := strconv.ParseUint(version, 10, 32)
+		if err != nil {
+			return err
+		}
+		if this.version > uint32(intVersion) {
+			return nil
+		}
+	}
+	if version, ok := tags.Lookup("osu-start"); ok {
+		intVersion, err := strconv.ParseUint(version, 10, 32)
+		if err != nil {
+			return err
+		}
+		if this.version < uint32(intVersion) {
+			return nil
+		}
+	}
 
-				err := ret[0].Interface()
-				if err != nil {
-					return err.(error)
-				}
+	switch fieldType.Kind() {
+	case reflect.Uint8:
+		var v uint8
+		if mutableField.CanInterface() {
+			v = mutableField.Interface().(uint8)
+		}
+		if err := binary.Write(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+	case reflect.Uint16:
+		var v uint16
+		if mutableField.CanInterface() {
+			v = mutableField.Interface().(uint16)
+		}
+		if err := binary.Write(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+	case reflect.Uint32:
+		var v uint32
+		if mutableField.CanInterface() {
+			v = mutableField.Interface().(uint32)
+		}
+		if err := binary.Write(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+	case reflect.Uint64:
+		var v uint64
+		if mutableField.CanInterface() {
+			v = mutableField.Interface().(uint64)
+		}
+		if err := binary.Write(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+	case reflect.Float32:
+		var v float32
+		if mutableField.CanInterface() {
+			v = mutableField.Interface().(float32)
+		}
+		if err := binary.Write(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+	case reflect.Float64:
+		var v float64
+		if mutableField.CanInterface() {
+			v = mutableField.Interface().(float64)
+		}
+		if err := binary.Write(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+	case reflect.Bool:
+		var boolVal bool
+		if mutableField.CanInterface() {
+			boolVal = mutableField.Interface().(bool)
+		}
+		var v uint8 = 0
+		if boolVal {
+			v = 1
+		}
+		if err := binary.Write(buf, binary.LittleEndian, &v); err != nil {
+			return err
+		}
+	case reflect.String:
+		var str string = ""
+		if mutableField.CanInterface() {
+			str = mutableField.Interface().(string)
+		}
+
+		v := String{}
+		if len(str) == 0 {
+			v.Cond = 0
+		} else {
+			v.Cond = 0xb
+			v.Len = ULEB128(len(str))
+			v.Text = str
+		}
+		if err := v.MarshalOsuBinary(buf); err != nil {
+			return err
+		}
+	case reflect.Struct:
+		if err := this.Write(mutableField.Interface(), buf); err != nil {
+			return err
+		}
+	case reflect.Slice:
+		var numElems uint32 = uint32(mutableField.Len())
+		if err := binary.Write(buf, binary.LittleEndian, &numElems); err != nil {
+			return err
+		}
+		for j := 0; j < int(numElems); j++ {
+			if err := this.Write(mutableField.Index(j).Addr().Interface(), buf); err != nil {
+				return err
 			}
-		default:
-			// This is just a primitive field so just run the simple marshal
-			ret := Invoke(
-				currentMutableField.Addr().Interface(), "MarshalOsuBinary", buf)
+		}
+	default:
+		return errors.New("Unsupported field type")
+	}
 
-			err := ret[0].Interface()
-			if err != nil {
-				return err.(error)
+	return nil
+}
+
+func (this *OsuBinaryWriter) Write(db interface{}, buf io.Writer) error {
+	valVal := reflect.ValueOf(db).Elem()
+	typeVal := reflect.TypeOf(db).Elem()
+
+	switch typeVal.Kind() {
+	case reflect.Struct:
+		for i := 0; i < typeVal.NumField(); i++ {
+			fieldType := typeVal.Field(i)
+			mutableField := valVal.Field(i)
+
+			if err := this.writeSingleField(fieldType.Type, mutableField, fieldType.Tag, buf); err != nil {
+				return err
 			}
+		}
+	default:
+		// assuming primitive type
+		var tag reflect.StructTag
+		if err := this.writeSingleField(typeVal, valVal, tag, buf); err != nil {
+			return err
 		}
 	}
 

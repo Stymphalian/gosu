@@ -29,3 +29,6 @@ go get -v github.com/Stymphalian/gosu
 # INFO
 __LICENSE:__ MIT \
 __Last Updated__: 2018/02/04
+
+TODO(jordanyu): sqlite DB
+TODO(jordanyu): web interface to manage collections

@@ -14,53 +14,52 @@ import (
 func TestEmpty(t *testing.T) {
 }
 
+func _runDbTest(DataFilepath string, Db interface{}, FinalDb interface{}, t *testing.T) {
+	reader := OsuBinaryReader{}
+	writer := OsuBinaryWriter{}
+
+	fmt.Println("Reading test case:", DataFilepath)
+
+	// Unmarshal a binary osu file
+	file, err := os.Open(DataFilepath)
+	if err != nil {
+		t.Errorf("Failed to open file %s", DataFilepath)
+	}
+	defer file.Close()
+	// err = Db.UnmarshalOsuBinary(file)
+	err = reader.Read(Db, file)
+	if err != nil {
+		t.Error("Failed to unmarshal binary")
+	}
+
+	// Marshal the file to a temp file
+	tmpfile, err := ioutil.TempFile("", "test-")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.Remove(tmpfile.Name())
+	// err = Db.MarshalOsuBinary(tmpfile)
+	err = writer.Write(Db, tmpfile)
+	if err != nil {
+		t.Error("Failed to marshal bianry")
+	}
+
+	// Unmarshal the file we just wrote. There should be no diff.
+	tmpfile.Seek(0, 0)
+	// err = FinalDb.(BinaryOsuUnmarshaler).UnmarshalOsuBinary(tmpfile)
+	err = reader.Read(FinalDb, tmpfile)
+	if err != nil {
+		t.Error("Failed to unmarshal final binary", err)
+	}
+
+	diff, equal := messagediff.PrettyDiff(Db, FinalDb)
+	if !equal {
+		t.Errorf("Marshal/Unmarshal failed.\n%s", diff)
+	}
+}
 func TestMarshalUnmarshal(t *testing.T) {
-	testcases := []struct {
-		Db           BinaryOsuCodec
-		FinalDb      BinaryOsuCodec
-		DataFilepath string
-	}{
-		{new(ScoresDb), new(ScoresDb), "data/scores.db"},
-		{new(CollectionDb), new(CollectionDb), "data/collection.db"},
-		{new(PresenceDb), new(PresenceDb), "data/presence.db"},
-		{new(OsuDb), new(OsuDb), "data/osu!.db"},
-	}
-
-	for _, testcase := range testcases {
-		fmt.Println("Reading test case:", testcase.DataFilepath)
-
-		// Unmarshal a binary osu file
-		file, err := os.Open(testcase.DataFilepath)
-		if err != nil {
-			t.Errorf("Failed to open file %s", testcase.DataFilepath)
-		}
-		defer file.Close()
-		err = testcase.Db.UnmarshalOsuBinary(file)
-		if err != nil {
-			t.Error("Failed to unmarshal binary")
-		}
-
-		// Marshal the file to a temp file
-		tmpfile, err := ioutil.TempFile("", "test-")
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer os.Remove(tmpfile.Name())
-		err = testcase.Db.MarshalOsuBinary(tmpfile)
-		if err != nil {
-			t.Error("Failed to marshal bianry")
-		}
-
-		// Unmarshal the file we just wrote. There should be no diff.
-		tmpfile.Seek(0, 0)
-		err = testcase.FinalDb.(BinaryOsuUnmarshaler).UnmarshalOsuBinary(tmpfile)
-		if err != nil {
-			t.Error("Failed to unmarshal final binary", err)
-		}
-
-		diff, equal := messagediff.PrettyDiff(testcase.Db, testcase.FinalDb)
-		if !equal {
-			t.Errorf("Marshal/Unmarshal failed.\n%s", diff)
-		}
-	}
+	_runDbTest("data/scores.db", new(ScoresDb), new(ScoresDb), t)
+	_runDbTest("data/collection.db", new(CollectionDb), new(CollectionDb), t)
+	_runDbTest("data/presence.db", new(PresenceDb), new(PresenceDb), t)
+	_runDbTest("data/osu!.db", new(OsuDb), new(OsuDb), t)
 }
