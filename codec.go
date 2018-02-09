@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"strconv"
 
 	"github.com/bnch/uleb128"
 )
@@ -19,19 +20,19 @@ type BinaryOsuCodec interface {
 
 // Unmarshaler interface for Osu Binary blobs
 type BinaryOsuUnmarshaler interface {
-	UnmarshalOsuBinary(buf io.Reader) error
+	UnmarshalOsuBinary(buf io.Reader, version Int) error
 }
 
 // Marshaler interface for Osu Binary blobs
 type BinaryOsuMarshaler interface {
-	MarshalOsuBinary(buf io.Writer) error
+	MarshalOsuBinary(buf io.Writer, version Int) error
 }
 
 // Marshal/Unmarshal function for ULEB128 and String
 // The other types can be found in auto.codec.go
 // -----------------------------------------------------------------------------
 
-func (this *ULEB128) UnmarshalOsuBinary(buf io.Reader) error {
+func (this *ULEB128) UnmarshalOsuBinary(buf io.Reader, version Int) error {
 	total := uleb128.UnmarshalReader(buf)
 	*this = ULEB128(uint64(total))
 
@@ -39,13 +40,13 @@ func (this *ULEB128) UnmarshalOsuBinary(buf io.Reader) error {
 	return nil
 }
 
-func (this *ULEB128) MarshalOsuBinary(buf io.Writer) error {
+func (this *ULEB128) MarshalOsuBinary(buf io.Writer, version Int) error {
 	got := uleb128.Marshal(int(uint64(*this)))
 	buf.Write(got)
 	return nil
 }
 
-func (this *String) UnmarshalOsuBinary(buf io.Reader) error {
+func (this *String) UnmarshalOsuBinary(buf io.Reader, version Int) error {
 	err := binary.Read(buf, binary.LittleEndian, &this.Cond)
 	if err != nil {
 		return err
@@ -53,7 +54,7 @@ func (this *String) UnmarshalOsuBinary(buf io.Reader) error {
 
 	if this.Cond == 0xb {
 		// TODO(jordanyu): Add error handling logic
-		err := this.Len.UnmarshalOsuBinary(buf)
+		err := this.Len.UnmarshalOsuBinary(buf, version)
 		if err != nil {
 			return err
 		}
@@ -73,7 +74,7 @@ func (this *String) UnmarshalOsuBinary(buf io.Reader) error {
 	return nil
 }
 
-func (this *String) MarshalOsuBinary(buf io.Writer) error {
+func (this *String) MarshalOsuBinary(buf io.Writer, version Int) error {
 	err := binary.Write(buf, binary.LittleEndian, &this.Cond)
 	if err != nil {
 		return err
@@ -81,7 +82,7 @@ func (this *String) MarshalOsuBinary(buf io.Writer) error {
 
 	if this.Cond == 0xb {
 		// TODO(jordanyu): Add error handling logic
-		err := this.Len.MarshalOsuBinary(buf)
+		err := this.Len.MarshalOsuBinary(buf, version)
 		if err != nil {
 			return err
 		}
@@ -126,11 +127,33 @@ func Invoke(any interface{}, name string, args ...interface{}) []reflect.Value {
 // Args:
 //   db: The object to unmarshal
 ///  buf: The buffer in which we retrieve bytes to unmarshal
-func UnmarshalAny(db interface{}, buf io.Reader) error {
+func UnmarshalAny(db interface{}, buf io.Reader, version Int) error {
 	dbVal := reflect.ValueOf(db).Elem()
+	dbType := reflect.TypeOf(db).Elem()
 
 	for i := 0; i < dbVal.NumField(); i++ {
-		currentMutableField := reflect.ValueOf(db).Elem().Field(i)
+		currentField := dbVal.Field(i)
+		currentFieldType := dbType.Field(i)
+
+		// handles tags
+		if gotVersion, ok := currentFieldType.Tag.Lookup("osu-end"); ok {
+			intVersion, err := strconv.ParseUint(gotVersion, 10, 32)
+			if err != nil {
+				return err
+			}
+			if version > Int(intVersion) {
+				continue
+			}
+		}
+		if gotVersion, ok := currentFieldType.Tag.Lookup("osu-start"); ok {
+			intVersion, err := strconv.ParseUint(gotVersion, 10, 32)
+			if err != nil {
+				return err
+			}
+			if version < Int(intVersion) {
+				continue
+			}
+		}
 
 		switch dbVal.Field(i).Type().Kind() {
 		case reflect.Slice:
@@ -142,12 +165,12 @@ func UnmarshalAny(db interface{}, buf io.Reader) error {
 
 			// Create a new slice of appropriate size and then run the unmarshal
 			// function over each element in the slice.
-			sliceElems := reflect.MakeSlice(currentMutableField.Type(),
+			sliceElems := reflect.MakeSlice(currentField.Type(),
 				int(intNumElements), int(intNumElements))
-			currentMutableField.Set(sliceElems)
+			currentField.Set(sliceElems)
 			for j := 0; j < intNumElements; j++ {
-				ret := Invoke(currentMutableField.Index(j).Addr().Interface(),
-					"UnmarshalOsuBinary", buf)
+				ret := Invoke(currentField.Index(j).Addr().Interface(),
+					"UnmarshalOsuBinary", buf, version)
 
 				err := ret[0].Interface()
 				if err != nil {
@@ -156,7 +179,7 @@ func UnmarshalAny(db interface{}, buf io.Reader) error {
 			}
 		default:
 			ret := Invoke(
-				currentMutableField.Addr().Interface(), "UnmarshalOsuBinary", buf)
+				currentField.Addr().Interface(), "UnmarshalOsuBinary", buf, version)
 
 			err := ret[0].Interface()
 			if err != nil {
@@ -179,11 +202,33 @@ func UnmarshalAny(db interface{}, buf io.Reader) error {
 // Args:
 //   db: The object to unmarshal
 ///  buf: The buffer in which to write the marshalled bytes
-func MarshalAny(db interface{}, buf io.Writer) error {
+func MarshalAny(db interface{}, buf io.Writer, version Int) error {
 	dbVal := reflect.ValueOf(db).Elem()
+	dbType := reflect.TypeOf(db).Elem()
 
 	for i := 0; i < dbVal.NumField(); i++ {
-		currentMutableField := reflect.ValueOf(db).Elem().Field(i)
+		currentField := reflect.ValueOf(db).Elem().Field(i)
+		currentFieldType := dbType.Field(i)
+
+		// handles tags
+		if gotVersion, ok := currentFieldType.Tag.Lookup("osu-end"); ok {
+			intVersion, err := strconv.ParseUint(gotVersion, 10, 32)
+			if err != nil {
+				return err
+			}
+			if version >= Int(intVersion) {
+				continue
+			}
+		}
+		if gotVersion, ok := currentFieldType.Tag.Lookup("osu-start"); ok {
+			intVersion, err := strconv.ParseUint(gotVersion, 10, 32)
+			if err != nil {
+				return err
+			}
+			if version < Int(intVersion) {
+				continue
+			}
+		}
 
 		switch dbVal.Field(i).Type().Kind() {
 		case reflect.Slice:
@@ -195,8 +240,8 @@ func MarshalAny(db interface{}, buf io.Writer) error {
 
 			// iterate through each element of the slice and marshal the struct
 			for j := 0; j < intNumElements; j++ {
-				ret := Invoke(currentMutableField.Index(j).Addr().Interface(),
-					"MarshalOsuBinary", buf)
+				ret := Invoke(currentField.Index(j).Addr().Interface(),
+					"MarshalOsuBinary", buf, version)
 
 				err := ret[0].Interface()
 				if err != nil {
@@ -206,7 +251,7 @@ func MarshalAny(db interface{}, buf io.Writer) error {
 		default:
 			// This is just a primitive field so just run the simple marshal
 			ret := Invoke(
-				currentMutableField.Addr().Interface(), "MarshalOsuBinary", buf)
+				currentField.Addr().Interface(), "MarshalOsuBinary", buf, version)
 
 			err := ret[0].Interface()
 			if err != nil {

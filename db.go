@@ -44,19 +44,23 @@ type BeatMap struct {
 	NumOfSliders             Short
 	NumOfSpinners            Short
 	LastModTimeTicks         Long
+	ApproachRateByte         Byte `osu-end:"20140609"`
+	CircleSizeByte           Byte `osu-end:"20140609"`
+	HPDrainRateByte          Byte `osu-end:"20140609"`
+	OverallDifficultyByte    Byte `osu-end:"20140609"`
 	ApproachRate             Single
 	CircleSize               Single
 	HPDrainRate              Single
 	OverallDifficulty        Single
 	SliderVelocity           Double
-	NumOsuStandardStarRating Int
-	OsuStandardStarRating    []IntDoublePair
-	NumTaikoStarRating       Int
-	TaikoStarRating          []IntDoublePair
-	NumCTBStarRating         Int
-	CTBStarRating            []IntDoublePair
-	NumManiaStarRating       Int
-	ManiaStarRating          []IntDoublePair
+	NumOsuStandardStarRating Int             `osu-start:"20140609"`
+	OsuStandardStarRating    []IntDoublePair `osu-start:"20140609"`
+	NumTaikoStarRating       Int             `osu-start:"20140609"`
+	TaikoStarRating          []IntDoublePair `osu-start:"20140609"`
+	NumCTBStarRating         Int             `osu-start:"20140609"`
+	CTBStarRating            []IntDoublePair `osu-start:"20140609"`
+	NumManiaStarRating       Int             `osu-start:"20140609"`
+	ManiaStarRating          []IntDoublePair `osu-start:"20140609"`
 	DrainTimeSecs            Int
 	TotalTimeMsec            Int
 	AudioPreviewMsec         Int
@@ -85,6 +89,7 @@ type BeatMap struct {
 	IgnoreBeatmapSkin        Boolean
 	DisableStoryboard        Boolean
 	DisableVideo             Boolean
+	UnknownShortField        Short `osu-end:"20140609"`
 	VisualOverride           Boolean
 	LastModificationTime     Int
 	ManiaScrollSpeed         Byte

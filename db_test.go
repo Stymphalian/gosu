@@ -35,7 +35,13 @@ func TestMarshalUnmarshal(t *testing.T) {
 			t.Errorf("Failed to open file %s", testcase.DataFilepath)
 		}
 		defer file.Close()
-		err = testcase.Db.UnmarshalOsuBinary(file)
+
+		version, err := GetVersionOfBinary(file)
+		if err != nil {
+			t.Error(err)
+		}
+		file.Seek(0, 0)
+		err = testcase.Db.UnmarshalOsuBinary(file, version)
 		if err != nil {
 			t.Error("Failed to unmarshal binary")
 		}
@@ -46,14 +52,14 @@ func TestMarshalUnmarshal(t *testing.T) {
 			log.Fatal(err)
 		}
 		defer os.Remove(tmpfile.Name())
-		err = testcase.Db.MarshalOsuBinary(tmpfile)
+		err = testcase.Db.MarshalOsuBinary(tmpfile, version)
 		if err != nil {
 			t.Error("Failed to marshal bianry")
 		}
 
 		// Unmarshal the file we just wrote. There should be no diff.
 		tmpfile.Seek(0, 0)
-		err = testcase.FinalDb.(BinaryOsuUnmarshaler).UnmarshalOsuBinary(tmpfile)
+		err = testcase.FinalDb.(BinaryOsuUnmarshaler).UnmarshalOsuBinary(tmpfile, version)
 		if err != nil {
 			t.Error("Failed to unmarshal final binary", err)
 		}
